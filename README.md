@@ -1,2 +1,2 @@
 # pyweb
-a light-weight and flexible python web framework
+pyweb easy-to-use and lightweight Python web framework
