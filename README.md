@@ -1,2 +1,2 @@
 # pyweb
-pyweb easy-to-use and lightweight Python web framework
+pyweb is an easy-to-use Python web framework for light-weighted RESTful API development
