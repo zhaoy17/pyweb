@@ -16,10 +16,9 @@ __all__ = [
     'parse_path_info'
 ]
 
-'''
-reserved and unreserved chracter defined under the RFC 3986 (STD66): "Uniform Resource Identifiers" by T. Berners-Lee,
-R. Fielding and L.  Masinter, January 2005.
-'''
+# reserved and unreserved chracter defined under the RFC 3986 (STD66): "Uniform Resource Identifiers" by T. Berners-Lee,
+# R. Fielding and L.  Masinter, January 2005.
+
 _ALPHA = frozenset(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
 _DIGIT = frozenset(b"0123456789")
 _GEN_DELIMS = frozenset(b":/?#[]@")
@@ -35,6 +34,12 @@ _HEX2BYTE = {}
 
 
 def _urldecode(string: str) -> str:
+    """
+    convert an % + hexadecimal representation encoding into the its original character
+
+    :param string: a % + hexadecimal encoded string
+    :return: the original character
+    """
     global _HEX2BYTE
     if str == "+":
         return " "
@@ -46,29 +51,34 @@ def _urldecode(string: str) -> str:
         return _urldecode(string)
 
 
-def _urlencode(byte: int) -> bytearray:
+def _urlencode(char: int) -> bytearray:
+    """
+    convert an unsafe character into % + hexadecimal representation of that character
+
+    :param char: a character represented as an int
+    :return: % + hexadecimal representation of the character if the character is
+            not safe
+    """
     global _BYTE2HEX
-    if byte not in _UNRESERVED:
+    if char not in _UNRESERVED:
         try:
-            return _BYTE2HEX[byte]
+            return _BYTE2HEX[char]
         except KeyError:
-            _BYTE2HEX[byte] = to_byte_array('%{:02X}'.format(byte))
-        return _urlencode(byte)
+            _BYTE2HEX[char] = to_byte_array('%{:02X}'.format(char))
+        return _urlencode(char)
     else:
-        return bytearray([byte])
-
-
-'''
-convert a string into a byte list. Skip all characters that are not in the range
-of ISO/IEC 8859-1 character set to avoid undefined behavior
-
-According to PEP3333, "Native" strings (which are always implemented using the type named str)
-that are used for request/response headers and metadata". The content content of native strings
-must be translatable to bytes via the Latin-1 encoding. HTTP does not support unicode.
-'''
+        return bytearray([char])
 
 
 def to_byte_array(string: str) -> bytearray:
+    """
+    convert a string into a byte list. Skip all characters that are not in the range
+    of ISO/IEC 8859-1 character set to avoid undefined behavior
+
+    According to PEP3333, "Native" strings (which are always implemented using the type named str)
+    that are used for request/response headers and metadata". The content content of native strings
+    must be translatable to bytes via the Latin-1 encoding. HTTP does not support unicode.
+    """
     byte_array = bytearray()
     for char in string:
         if ord(char) >= 256:
@@ -78,33 +88,41 @@ def to_byte_array(string: str) -> bytearray:
     return byte_array
 
 
-'''
-Convert a byte array into string
-'''
-
-
 def to_string(byte_array: Union[bytes, bytearray]) -> str:
+    """
+    convert a byte array into string
+
+    :param byte_array: a latin1 encoded byte array
+    :return: a decoded string
+    """
     string = []
     for byte in byte_array:
         string.append(chr(byte))
     return "".join(string)
 
 
-'''
-Encode all characters in an url that does not belong to unreserved set of character into 
-%hex representation of that character.
-'''
+def encode(url: Union[str, bytes, bytearray]) -> bytearray:
+    """
+    Encode all characters in an url that does not belong to unreserved set of character into
+    %hex representation of that character.
 
-
-def encode(bytes_array: Union[str, bytes, bytearray]) -> bytearray:
-    if isinstance(bytes_array, str):
-        bytes_array = to_byte_array(bytes_array)
-    if isinstance(bytes_array, str):
-        bytes_array = to_byte_array(bytes_array)
-    return bytearray(b''.join([_urlencode(char) for char in bytes_array]))
+    :param url: a url byte array
+    :return: url with unsafe character encoded using % + hex(chr)
+    """
+    if isinstance(url, str):
+        url = to_byte_array(url)
+    if isinstance(url, str):
+        url = to_byte_array(url)
+    return bytearray(b''.join([_urlencode(char) for char in url]))
 
 
 def decode(string: Union[str, bytes, bytearray]) -> str:
+    """
+    decode a % encoded url into its original form
+
+    :param string: a % encoded url string
+    :return: unencoded url string
+    """
     if isinstance(string, bytes) or isinstance(string, bytearray):
         string = to_string(string)
     if "%" not in string and "+" not in string:
@@ -121,6 +139,13 @@ def decode(string: Union[str, bytes, bytearray]) -> str:
 
 
 def parse_query_string(query: str) -> dict:
+    """
+    parse a query string portion of an url (the part after "?") into a key-value pairs,
+    skip empty query string
+
+    :param query: a raw query string
+    :return: key-value pairs with parameter and its value
+    """
     pairs = query.split("&")
     kv = {}
     for item in pairs:
@@ -135,19 +160,27 @@ def parse_query_string(query: str) -> dict:
 
 
 def parse_path_info(string: str) -> list:
+    """
+    parse the path info, which will be used to find modules requested by the url
+
+    :param string: the path info string
+    :return:    a list of directory split by "/"
+    """
     string = decode(string.lstrip("/"))
     return string.split("/")
 
 
-""" Implementation comes from urllib. Parse a canonical 'host:port' string into parts. 
-Parse a host string (which may or may not contain a port) into
-parts, taking into account that the string may contain
-either a domain name or an IP address. In the latter case,
-both IPv4 and IPv6 addresses are supported.
-"""
-
-
 def parse_host(host: str) -> tuple:
+    """
+    Implementation comes from urllib. Parse a canonical 'host:port' string into parts.
+    Parse a host string (which may or may not contain a port) into
+    parts, taking into account that the string may contain
+    either a domain name or an IP address. In the latter case,
+    both IPv4 and IPv6 addresses are supported.
+
+    :param host: the content of the host header
+    :return:     host name and port number
+    """
     global _reg_host
     if _reg_host is None:
         _reg_host = re.compile("(.*):([0-9]*)", re.DOTALL)
