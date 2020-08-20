@@ -44,6 +44,12 @@ class HTTPRequest:
 
     @property
     def port(self):
+        """
+        infer the port number of the request; HTTP_HOST should be preferred over
+        SEVER_NAME and SEVER_PORT variable according to PEP3333
+
+        :return: the port number of the request as int
+        """
         if self._port is None:
             try:
                 host, port = parse_host(self._env['HTTP_HOST'])
