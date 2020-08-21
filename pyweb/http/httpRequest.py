@@ -1,6 +1,6 @@
 from typing import Callable
-from .url import parse_query_string, parse_host, parse_path_info
-from .header import parse_content_type, types_map
+from .url import parse_query_string, parse_host, parse_path_info, decode
+from .header import parse_content_type, handleContent, header_to_extension, types_supported
 
 
 class HTTPRequest:
@@ -18,6 +18,8 @@ class HTTPRequest:
         self._port = None
         self._object_location = None
         self._content_type = None
+        self._content_type_info = None
+        self._body = None
 
     @property
     def query(self) -> str:
@@ -67,30 +69,41 @@ class HTTPRequest:
         return self._host
 
     @property
-    def content_type(self) -> list:
+    def content_type(self) -> str:
         if self.method == "GET":
-            return ["", {}]
+            return ""
         if self._content_type is None:
             try:
-                header = self._env["CONTENT_TYPE"]
+                header = decode(self._env["CONTENT_TYPE"]
+                                .encode("latin1").decode("utf-8", "replace"))
             except KeyError:
                 header = ""
             self._content_type = parse_content_type(header)
+            self._content_type_info = self._content_type[1]
+            self._content_type = self._content_type[0]
         return self._content_type
+
+    @property
+    def content_type_info(self) -> dict:
+        if self.method == "Get":
+            return {}
+        if self._content_type_info is None:
+            self._content_type()
+        return self._content_type_info
 
     @property
     def content_length(self) -> int:
         try:
             return self._env['CONTENT_LENGTH']
         except KeyError:
-            return -1
+            return 0
 
     @property
-    def content_extension(self) -> str:
+    def content_extension(self) -> set:
         try:
-            return types_map[self.content_type[0]]
+            return header_to_extension[self.content_type[0]]
         except KeyError:
-            return ""
+            return set()
 
     def get_header(self, header: str, parser: Callable = None) -> str:
         try:
@@ -101,3 +114,27 @@ class HTTPRequest:
             return parser(output_header)
         else:
             return output_header
+
+    def is_filetype(self, filetype: str) -> bool:
+        if "." + filetype.lower().strip() in self.content_type:
+            return True
+        else:
+            return filetype.lower().strip() in self.content_type
+
+    def _file_supported(self) -> bool:
+        if self.content_extension in types_supported:
+            return True
+        else:
+            return False
+
+    def get_body_as_text(self) -> str:
+        if self._body is None:
+            self._body = self.wsgi_input.read(self.content_length)
+        return self._body
+
+    def parse_body(self):
+        if self._file_supported():
+            handler = handleContent(self.content_extension)
+            return handler(self.get_body_as_text())
+        else:
+            return self.get_body_as_text()

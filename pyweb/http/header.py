@@ -5,10 +5,13 @@ MIME header.
 
 __all__ = [
     'parse_content_type',
-    'types_map'
+    'extension_to_header',
+    'header_to_extension',
+    'types_supported',
+    'handleContent'
 ]
 
-types_map = {
+extension_to_header = {
     '.js': 'application/javascript',
     '.mjs': 'application/javascript',
     '.json': 'application/json',
@@ -142,10 +145,20 @@ types_map = {
     '.movie': 'video/x-sgi-movie',
 }
 
-_accept = frozenset(types_map[media].split("/")[1] for media in types_map)
+types_supported = {".json"}  # TODO add support for a greater variety of file types
+
+header_to_extension = {}
+
+for ext in extension_to_header:
+    if extension_to_header[ext] not in header_to_extension:
+        header_to_extension[extension_to_header[ext]] = {ext}
+    else:
+        header_to_extension[extension_to_header[ext]].add(ext)
+
+_accept = frozenset(extension_to_header[media].split("/")[1] for media in extension_to_header)
 
 
-def parse_content_type(line : str, accepted_content_type : set =_accept) -> list:
+def parse_content_type(line: str, accepted_content_type: set = _accept) -> list:
     """Parse a Content-type like header.
     Return the main content-type and a dictionary of options.
     """
@@ -168,3 +181,21 @@ def parse_content_type(line : str, accepted_content_type : set =_accept) -> list
             else:
                 params[kv[0].strip()] = kv[1].strip()
     return [content, params]
+
+
+def handleContent(filetype, handler=None):
+    if handler is None:
+        try:
+            return globals()["handle_" + filetype[1:]]
+        except KeyError:
+            raise ValueError("this filetype is not supported")
+    else:
+        try:
+            return getattr(handler, filetype[1:])
+        except KeyError:
+            raise ValueError("this file type is not supported")
+
+
+def handle_json(file):
+    import json
+    return json.loads(file)
