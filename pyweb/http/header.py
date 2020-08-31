@@ -3,199 +3,178 @@ This module consists of functions that are used to parse multipart and discrete
 MIME header.
 """
 
+from abc import ABC, abstractmethod
+import json
+
 __all__ = [
-    'parse_content_type',
-    'extension_to_header',
-    'header_to_extension',
-    'types_supported',
-    'handleContent'
+    "ContentType",
+    "Header",
+    "HTTPBody"
 ]
 
-extension_to_header = {
-    '.js': 'application/javascript',
-    '.mjs': 'application/javascript',
-    '.json': 'application/json',
-    '.webmanifest': 'application/manifest+json',
-    '.doc': 'application/msword',
-    '.dot': 'application/msword',
-    '.wiz': 'application/msword',
-    '.bin': 'application/octet-stream',
-    '.a': 'application/octet-stream',
-    '.dll': 'application/octet-stream',
-    '.exe': 'application/octet-stream',
-    '.o': 'application/octet-stream',
-    '.obj': 'application/octet-stream',
-    '.so': 'application/octet-stream',
-    '.oda': 'application/oda',
-    '.pdf': 'application/pdf',
-    '.p7c': 'application/pkcs7-mime',
-    '.ps': 'application/postscript',
-    '.ai': 'application/postscript',
-    '.eps': 'application/postscript',
-    '.m3u': 'application/vnd.apple.mpegurl',
-    '.m3u8': 'application/vnd.apple.mpegurl',
-    '.xls': 'application/vnd.ms-excel',
-    '.xlb': 'application/vnd.ms-excel',
-    '.ppt': 'application/vnd.ms-powerpoint',
-    '.pot': 'application/vnd.ms-powerpoint',
-    '.ppa': 'application/vnd.ms-powerpoint',
-    '.pps': 'application/vnd.ms-powerpoint',
-    '.pwz': 'application/vnd.ms-powerpoint',
-    '.wasm': 'application/wasm',
-    '.bcpio': 'application/x-bcpio',
-    '.cpio': 'application/x-cpio',
-    '.csh': 'application/x-csh',
-    '.dvi': 'application/x-dvi',
-    '.gtar': 'application/x-gtar',
-    '.hdf': 'application/x-hdf',
-    '.h5': 'application/x-hdf5',
-    '.latex': 'application/x-latex',
-    '.mif': 'application/x-mif',
-    '.cdf': 'application/x-netcdf',
-    '.nc': 'application/x-netcdf',
-    '.p12': 'application/x-pkcs12',
-    '.pfx': 'application/x-pkcs12',
-    '.ram': 'application/x-pn-realaudio',
-    '.pyc': 'application/x-python-code',
-    '.pyo': 'application/x-python-code',
-    '.sh': 'application/x-sh',
-    '.shar': 'application/x-shar',
-    '.swf': 'application/x-shockwave-flash',
-    '.sv4cpio': 'application/x-sv4cpio',
-    '.sv4crc': 'application/x-sv4crc',
-    '.tar': 'application/x-tar',
-    '.tcl': 'application/x-tcl',
-    '.tex': 'application/x-tex',
-    '.texi': 'application/x-texinfo',
-    '.texinfo': 'application/x-texinfo',
-    '.roff': 'application/x-troff',
-    '.t': 'application/x-troff',
-    '.tr': 'application/x-troff',
-    '.man': 'application/x-troff-man',
-    '.me': 'application/x-troff-me',
-    '.ms': 'application/x-troff-ms',
-    '.ustar': 'application/x-ustar',
-    '.src': 'application/x-wais-source',
-    '.xsl': 'application/xml',
-    '.rdf': 'application/xml',
-    '.wsdl': 'application/xml',
-    '.xpdl': 'application/xml',
-    '.zip': 'application/zip',
-    '.au': 'audio/basic',
-    '.snd': 'audio/basic',
-    '.mp3': 'audio/mpeg',
-    '.mp2': 'audio/mpeg',
-    '.aif': 'audio/x-aiff',
-    '.aifc': 'audio/x-aiff',
-    '.aiff': 'audio/x-aiff',
-    '.ra': 'audio/x-pn-realaudio',
-    '.wav': 'audio/x-wav',
-    '.gif': 'image/gif',
-    '.ief': 'image/ief',
-    '.jpg': 'image/jpeg',
-    '.jpe': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.svg': 'image/svg+xml',
-    '.tiff': 'image/tiff',
-    '.tif': 'image/tiff',
-    '.ico': 'image/vnd.microsoft.icon',
-    '.ras': 'image/x-cmu-raster',
-    '.bmp': 'image/x-ms-bmp',
-    '.pnm': 'image/x-portable-anymap',
-    '.pbm': 'image/x-portable-bitmap',
-    '.pgm': 'image/x-portable-graymap',
-    '.ppm': 'image/x-portable-pixmap',
-    '.rgb': 'image/x-rgb',
-    '.xbm': 'image/x-xbitmap',
-    '.xpm': 'image/x-xpixmap',
-    '.xwd': 'image/x-xwindowdump',
-    '.eml': 'message/rfc822',
-    '.mht': 'message/rfc822',
-    '.mhtml': 'message/rfc822',
-    '.nws': 'message/rfc822',
-    '.css': 'text/css',
-    '.csv': 'text/csv',
-    '.html': 'text/html',
-    '.htm': 'text/html',
-    '.txt': 'text/plain',
-    '.bat': 'text/plain',
-    '.c': 'text/plain',
-    '.h': 'text/plain',
-    '.ksh': 'text/plain',
-    '.pl': 'text/plain',
-    '.rtx': 'text/richtext',
-    '.tsv': 'text/tab-separated-values',
-    '.py': 'text/x-python',
-    '.etx': 'text/x-setext',
-    '.sgm': 'text/x-sgml',
-    '.sgml': 'text/x-sgml',
-    '.vcf': 'text/x-vcard',
-    '.xml': 'text/xml',
-    '.mp4': 'video/mp4',
-    '.mpeg': 'video/mpeg',
-    '.m1v': 'video/mpeg',
-    '.mpa': 'video/mpeg',
-    '.mpe': 'video/mpeg',
-    '.mpg': 'video/mpeg',
-    '.mov': 'video/quicktime',
-    '.qt': 'video/quicktime',
-    '.webm': 'video/webm',
-    '.avi': 'video/x-msvideo',
-    '.movie': 'video/x-sgi-movie',
-}
 
-types_supported = {".json"}  # TODO add support for a greater variety of file types
+class Header(ABC):
+    @abstractmethod
+    def to_str(self) -> str:
+        pass
 
-header_to_extension = {}
+    @abstractmethod
+    def to_dict(self) -> dict:
+        pass
 
-for ext in extension_to_header:
-    if extension_to_header[ext] not in header_to_extension:
-        header_to_extension[extension_to_header[ext]] = {ext}
-    else:
-        header_to_extension[extension_to_header[ext]].add(ext)
+    @abstractmethod
+    def __bool__(self):
+        pass
 
-_accept = frozenset(extension_to_header[media].split("/")[1] for media in extension_to_header)
+    @abstractmethod
+    def to_header(self) -> str:
+        pass
+
+    @abstractmethod
+    def to_list(self) -> list:
+        pass
 
 
-def parse_content_type(line: str, accepted_content_type: set = _accept) -> list:
-    """Parse a Content-type like header.
-    Return the main content-type and a dictionary of options.
-    """
-    if line == "":
-        return ["", {}]
-    parts = line.split(";")
-    file_type_header = parts[0].lower().strip()
-    if "/" in file_type_header:
-        if file_type_header.split("/")[1] not in accepted_content_type:
-            raise ValueError("unknown content type")
-    elif file_type_header not in accepted_content_type:
-        raise ValueError("unknown content type")
-    content = file_type_header
-    params = {}
-    if len(parts) > 1:
-        for i in range(1, len(parts)):
-            kv = parts[i].split("=")
-            if len(kv) != 2:
-                raise ValueError("content-type header is not formatted correctly")
-            else:
-                params[kv[0].strip()] = kv[1].strip()
-    return [content, params]
+class ContentType(Header):
+    class Handler(ABC):
+        @abstractmethod
+        def parse(self):
+            pass
 
+        @staticmethod
+        @abstractmethod
+        def content_type() -> list:
+            pass
 
-def handleContent(filetype, handler=None):
-    if handler is None:
+    class JSONHandler(Handler):
+        def __init__(self, raw_string: str):
+            self._str = raw_string
+            self._dict = None
+
+        def to_str(self) -> str:
+            return self._str
+
+        def parse(self) -> dict:
+            if self._dict is None:
+                self._dict = json.loads(self._str)
+            return self._dict
+
+        @staticmethod
+        def content_type() -> list:
+            return ["application/json"]
+
+    _HandlerMap = {"application/json": JSONHandler}
+
+    def __init__(self, raw_header):
+        self._raw = raw_header
+        self._str = None
+        self._dict = None
+        self._bool = None
+        self._list = None
+
+    def to_header(self):
+        return self._raw
+
+    def to_str(self) -> str:
+        if not self:
+            return ""
+        if self._str is None:
+            self._str = self._raw.split(";")[0]
+        return self._str
+
+    def to_dict(self) -> dict:
+        if not self:
+            return {}
+        if self._dict is None:
+            if self._list is None:
+                self._list = self._parse_content_type(self._str)
+            content = self._list[0]
+            params = self._list[1]
+            params["type"] = content
+            self._dict = params
+        return self._dict
+
+    def __bool__(self):
+        return self._str != ""
+
+    def to_list(self):
+        if not self:
+            return None
+        if self._dict is None:
+            self.to_dict()
+        return self._dict.keys()
+
+    @classmethod
+    def from_dict(cls, content_type: dict):
+        charset = "utf-8"
+        if "charset" in content_type:
+            charset = content_type["charset"]
+        raw_header = content_type["type"] + "; " + charset
+        for key in content_type:
+            if key != "charset":
+                raw_header += "; " + content_type[key]
+        return cls(raw_header)
+
+    def get_handler(self, raw_string: str) -> Handler:
+        content_type = self.to_str()
         try:
-            return globals()["handle_" + filetype[1:]]
+            return ContentType._HandlerMap[content_type](raw_string)
         except KeyError:
-            raise ValueError("this filetype is not supported")
-    else:
+            raise ValueError("Header type not supported")
+
+    @staticmethod
+    def add_handler(handler: Handler):
+        for _t in handler.content_type():
+            ContentType._HandlerMap[_t] = handler
+
+    @staticmethod
+    def _parse_content_type(line: str) -> list:
+        """Parse a Content-type like header.
+        Return the main content-type and a dictionary of options.
+        """
+        if line == "":
+            return ["", {}]
+        parts = line.split(";")
+        file_type_header = parts[0].lower().strip()
+        content = file_type_header
+        params = {}
+        if len(parts) > 1:
+            for i in range(1, len(parts)):
+                kv = parts[i].split("=")
+                if len(kv) != 2:
+                    raise ValueError("content-type header is not formatted correctly")
+                else:
+                    params[kv[0].strip()] = kv[1].strip()
+        return [content, params]
+
+
+class HTTPBody:
+    def __init__(self, stream, content_type: ContentType, content_length: int):
+        self._content_type = content_type
+        self._input = stream
         try:
-            return getattr(handler, filetype[1:])
+            self._encoding = content_type.to_dict()["charset"]
         except KeyError:
-            raise ValueError("this file type is not supported")
+            self._encoding = "utf-8"
+        self._handler = None
+        self._data = None
+        self._str = None
+        self._output = None
+        self._size = content_length
 
+    def get_bytes(self):
+        if self._data is None:
+            self._data = self._input.read(self._size)
+        return self._data
 
-def handle_json(file):
-    import json
-    return json.loads(file)
+    def get_str(self):
+        if self._str is None:
+            self._str = self.get_bytes().decode(self._encoding)
+        return self._str
+
+    def parse_content(self):
+        if self._output is None:
+            if self._handler is None:
+                self._handler = self._content_type.get_handler(self.get_str())
+                self._output = self._handler.parse()
+        return self._output
