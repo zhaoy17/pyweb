@@ -1,47 +1,26 @@
-from typing import Callable
-from .url import parse_query_string, parse_host, parse_path_info, decode
-from .header import parse_content_type, handleContent, header_to_extension, types_supported
+from ._url import parse_query_string, parse_host, parse_path_info, decode
+from .header import ContentType, HTTPBody
 
 
-class HTTPRequest:
-    def __init__(self, environ: dict):
+class BaseRequest:
+    def __init__(self, environ):
         self._env = environ
-        self.method = environ["REQUEST_METHOD"]
+        self._method = environ["REQUEST_METHOD"]
         try:
             self._pathinfo = environ["PATH_INFO"]
         except KeyError:
             self._pathinfo = "/"
-        self.wsgi_error = environ["wsgi.errors"]
-        self.wsgi_input = environ["wsgi.input"]
-        self._query_string = None
+        self._wsgi_error = environ["wsgi.errors"]
+        self._stream = environ["wsgi.input"]
         self._host = None
         self._port = None
-        self._object_location = None
+        self._path = None
         self._content_type = None
-        self._content_type_info = None
-        self._body = None
+        self._query_string = None
 
     @property
-    def query(self) -> str:
-        try:
-            raw_string = self._env["QUERY_STRING"] \
-                .encode("latin1").decode("utf-8", "replace")
-        except KeyError:
-            raw_string = ""
-        return raw_string
-
-    @property
-    def params(self) -> dict:
-        if self._query_string is None:
-            self._query_string = parse_query_string(self._env["QUERY_STRING"])
-        return self._query_string
-
-    @property
-    def object_location(self) -> list:
-        if self._object_location is None:
-            self._object_location = parse_path_info(self._pathinfo)
-        else:
-            return self._object_location
+    def method(self):
+        return self._method
 
     @property
     def port(self):
@@ -69,27 +48,34 @@ class HTTPRequest:
         return self._host
 
     @property
-    def content_type(self) -> str:
+    def path(self) -> list:
+        if self._path is None:
+            self._path = parse_path_info(self._pathinfo)
+        return self._path
+
+    @property
+    def query_string(self) -> dict:
+        if self._query_string is None:
+            try:
+                raw_string = self._env["QUERY_STRING"] \
+                    .encode("latin1").decode("utf-8", "replace")
+            except KeyError:
+                raw_string = ""
+            self._query_string = parse_query_string(raw_string)
+        return self._query_string
+
+    @property
+    def content_type(self) -> ContentType:
         if self.method == "GET":
-            return ""
+            return ContentType("")
         if self._content_type is None:
             try:
                 header = decode(self._env["CONTENT_TYPE"]
                                 .encode("latin1").decode("utf-8", "replace"))
             except KeyError:
                 header = ""
-            self._content_type = parse_content_type(header)
-            self._content_type_info = self._content_type[1]
-            self._content_type = self._content_type[0]
+            self._content_type = ContentType(header)
         return self._content_type
-
-    @property
-    def content_type_info(self) -> dict:
-        if self.method == "Get":
-            return {}
-        if self._content_type_info is None:
-            self._content_type()
-        return self._content_type_info
 
     @property
     def content_length(self) -> int:
@@ -99,42 +85,5 @@ class HTTPRequest:
             return 0
 
     @property
-    def content_extension(self) -> set:
-        try:
-            return header_to_extension[self.content_type[0]]
-        except KeyError:
-            return set()
-
-    def get_header(self, header: str, parser: Callable = None) -> str:
-        try:
-            output_header = self._env["HTTP_" + header.strip().upper()]
-        except KeyError:
-            raise ValueError("requires header: {}".format(header.strip().upper()))
-        if parser is not None:
-            return parser(output_header)
-        else:
-            return output_header
-
-    def is_filetype(self, filetype: str) -> bool:
-        if "." + filetype.lower().strip() in self.content_type:
-            return True
-        else:
-            return filetype.lower().strip() in self.content_type
-
-    def _file_supported(self) -> bool:
-        if self.content_extension in types_supported:
-            return True
-        else:
-            return False
-
-    def get_body_as_text(self) -> str:
-        if self._body is None:
-            self._body = self.wsgi_input.read(self.content_length)
-        return self._body
-
-    def parse_body(self):
-        if self._file_supported():
-            handler = handleContent(self.content_extension)
-            return handler(self.get_body_as_text())
-        else:
-            return self.get_body_as_text()
+    def message_body(self) -> HTTPBody:
+        return HTTPBody(self._stream, self.content_type, self.content_length)
